@@ -68,13 +68,13 @@ VoVNet99 = {
 }
 
 _STAGE_SPECS = {
-    "V-19-slim-dw": VoVNet19_slim_dw,
-    "V-19-dw": VoVNet19_dw,
-    "V-19-slim": VoVNet19_slim,
-    "V-19": VoVNet19,
-    "V-39": VoVNet39,
-    "V-57": VoVNet57,
-    "V-99": VoVNet99,
+    "vovnet-19-slim-dw": VoVNet19_slim_dw,
+    "vovnet-19-dw": VoVNet19_dw,
+    "vovnet-19-slim": VoVNet19_slim,
+    "vovnet-19": VoVNet19,
+    "vovnet-39": VoVNet39,
+    "vovnet-57": VoVNet57,
+    "vovnet-99": VoVNet99,
 }
 
 
