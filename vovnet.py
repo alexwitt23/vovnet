@@ -345,3 +345,7 @@ class VoVNet(torch.nn.Sequential):
     def delete_classification_head(self) -> None:
         """ Call this before using model as an object detection backbone. """
         del self.model.classifier
+
+    def get_pyramid_channels(self) -> None:
+        """ Return the number of channels for each pyramid level. """
+        return self._out_feature_channels
