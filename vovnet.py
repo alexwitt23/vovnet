@@ -226,7 +226,7 @@ class _OSA_stage(torch.nn.Sequential):
 
         if not stage_num == 2:
             self.add_module(
-                "Pooling", torch.nn.MaxPool2d(kernel_size=3, stride=2, ceil_mode=True)
+                "Pooling", torch.nn.MaxPool2d(kernel_size=3, stride=2, padding=1)
             )
 
         for idx in range(block_per_stage):
@@ -253,7 +253,7 @@ class VoVNet(torch.nn.Sequential):
             num_classes: The number of classification classes.
             input_channels: The number of input channels.
         Usage:
-        >>> net = VoVNet("V-19-slim-dw", num_classes=1000)
+        >>> net = VoVNet("vovnet-19-slim-dw", num_classes=1000)
         >>> with torch.no_grad():
         ...    out = net(torch.randn(1, 3, 512, 512))
         >>> print(out.shape)
@@ -271,9 +271,9 @@ class VoVNet(torch.nn.Sequential):
         conv_type = dw_conv if _STAGE_SPECS[model_name]["dw"] else conv
 
         # Construct the stem.
-        stem = conv(input_channels, 64)
+        stem = conv(input_channels, 64, stride=2)
         stem += conv(64, 64)
-        stem += conv(64, stem_ch)
+        stem += conv(64, stem_ch, stride=2)
         self.model = torch.nn.Sequential()
         self.model.add_module("stem", torch.nn.Sequential(*stem))
         self._out_feature_channels = [stem_ch]
@@ -327,12 +327,14 @@ class VoVNet(torch.nn.Sequential):
             num_classes: The number of classification classes.
             input_channels: The number of input channels.
         Usage:
-        >>> net = VoVNet("V-19-slim-dw", num_classes=1000)
+        >>> net = VoVNet("vovnet-19-slim-dw", num_classes=1000)
         >>> net.delete_classification_head()
         >>> with torch.no_grad():
         ...    out = net.forward_pyramids(torch.randn(1, 3, 512, 512))
-        >>> print(out.shape)
-        torch.Size([1, 1000])
+        >>> [level.shape[-1] for level in out.values()]  # Check the height/widths of levels
+        [128, 128, 64, 32, 16]
+        >>> [level.shape[1] for level in out.values()]  == net._out_feature_channels
+        True
         """
         levels = collections.OrderedDict()
         levels[1] = self.model.stem(x)
@@ -348,4 +350,5 @@ class VoVNet(torch.nn.Sequential):
 
     def get_pyramid_channels(self) -> None:
         """ Return the number of channels for each pyramid level. """
+        print(self._out_feature_channels)
         return self._out_feature_channels
