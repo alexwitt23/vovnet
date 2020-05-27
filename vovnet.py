@@ -78,7 +78,7 @@ _STAGE_SPECS = {
 }
 
 
-def dw_conv(in_channels: int, out_channels: int) -> List[torch.nn.Module]:
+def dw_conv(in_channels: int, out_channels: int, stride: int = 1) -> List[torch.nn.Module]:
     """ Depthwise separable pointwise linear convolution. """
     return [
         torch.nn.Conv2d(
@@ -86,6 +86,7 @@ def dw_conv(in_channels: int, out_channels: int) -> List[torch.nn.Module]:
             in_channels,
             kernel_size=3,
             padding=1,
+            stride=stride,
             groups=in_channels,
             bias=False,
         ),
@@ -272,8 +273,8 @@ class VoVNet(torch.nn.Sequential):
 
         # Construct the stem.
         stem = conv(input_channels, 64, stride=2)
-        stem += conv(64, 64)
-        stem += conv(64, stem_ch, stride=2)
+        stem += conv_type(64, 64)
+        stem += conv_type(64, stem_ch, stride=2)
         self.model = torch.nn.Sequential()
         self.model.add_module("stem", torch.nn.Sequential(*stem))
         self._out_feature_channels = [stem_ch]
