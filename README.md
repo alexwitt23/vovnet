@@ -9,6 +9,6 @@ This is currently a work-in-progress, but the VoVNet2 is functional.
 
 
 ## TODO
-- [ ] Basic Tox testing
-- [ ] GitHub Actions CI
+- [X] Basic Tox testing
+- [X] GitHub Actions CI
 - [ ] CenterMask2 code

@@ -1,80 +1,44 @@
 """ Adapted from the original implementation. """
 
 import collections
+import dataclasses
 from typing import List
 
 import torch
 
-VoVNet19_slim_dw = {
-    "stem_out": 64,
-    "stage_conv_ch": [64, 80, 96, 112],
-    "stage_out_ch": [112, 256, 384, 512],
-    "layer_per_block": 3,
-    "block_per_stage": [1, 1, 1, 1],
-    "dw": True,
-}
 
-VoVNet19_dw = {
-    "stem_out": 64,
-    "stage_conv_ch": [128, 160, 192, 224],
-    "stage_out_ch": [256, 512, 768, 1024],
-    "layer_per_block": 3,
-    "block_per_stage": [1, 1, 1, 1],
-    "dw": True,
-}
+@dataclasses.dataclass
+class VoVNetParams:
+    stem_out: int
+    stage_conv_ch: List[int] # Channel depth of 
+    stage_out_ch: List[int]  # The channel depth of the concatenated output
+    layer_per_block: int
+    block_per_stage: List[int]
+    dw: bool
 
-VoVNet19_slim = {
-    "stem_out": 128,
-    "stage_conv_ch": [64, 80, 96, 112],
-    "stage_out_ch": [112, 256, 384, 512],
-    "layer_per_block": 3,
-    "block_per_stage": [1, 1, 1, 1],
-    "dw": False,
-}
-
-VoVNet19 = {
-    "stem_out": 128,
-    "stage_conv_ch": [128, 160, 192, 224],
-    "stage_out_ch": [256, 512, 768, 1024],
-    "layer_per_block": 3,
-    "block_per_stage": [1, 1, 1, 1],
-    "dw": False,
-}
-
-VoVNet39 = {
-    "stem_out": 128,
-    "stage_conv_ch": [128, 160, 192, 224],
-    "stage_out_ch": [256, 512, 768, 1024],
-    "layer_per_block": 5,
-    "block_per_stage": [1, 1, 2, 2],
-    "dw": False,
-}
-
-VoVNet57 = {
-    "stem_out": 128,
-    "stage_conv_ch": [128, 160, 192, 224],
-    "stage_out_ch": [256, 512, 768, 1024],
-    "layer_per_block": 5,
-    "dw": False,
-}
-
-VoVNet99 = {
-    "stem_out": 128,
-    "stage_conv_ch": [128, 160, 192, 224],
-    "stage_out_ch": [256, 512, 768, 1024],
-    "layer_per_block": 5,
-    "block_per_stage": [1, 3, 9, 3],
-    "dw": False,
-}
 
 _STAGE_SPECS = {
-    "vovnet-19-slim-dw": VoVNet19_slim_dw,
-    "vovnet-19-dw": VoVNet19_dw,
-    "vovnet-19-slim": VoVNet19_slim,
-    "vovnet-19": VoVNet19,
-    "vovnet-39": VoVNet39,
-    "vovnet-57": VoVNet57,
-    "vovnet-99": VoVNet99,
+    "vovnet-19-slim-dw": VoVNetParams(
+        64, [64, 80, 96, 112], [112, 256, 384, 512], 3, [1, 1, 1, 1], True
+    ),
+    "vovnet-19-dw": VoVNetParams(
+        64, [128, 160, 192, 224], [256, 512, 768, 1024], 3, [1, 1, 1, 1], True
+    ),
+    "vovnet-19-slim": VoVNetParams(
+        128, [64, 80, 96, 112], [112, 256, 384, 512], 3, [1, 1, 1, 1], False
+    ),
+    "vovnet-19": VoVNetParams(
+        128, [128, 160, 192, 224], [256, 512, 768, 1024], 3, [1, 1, 1, 1], False
+    ),
+    "vovnet-39": VoVNetParams(
+        128, [128, 160, 192, 224], [256, 512, 768, 1024], 5, [1, 1, 2, 2], False
+    ),
+    "vovnet-57": VoVNetParams(
+        128, [128, 160, 192, 224], [256, 512, 768, 1024], 5, [1, 1, 4, 3], False
+    ),
+    "vovnet-99": VoVNetParams(
+        128, [128, 160, 192, 224], [256, 512, 768, 1024], 5, [1, 3, 9, 3], False
+    ),
 }
 
 
@@ -92,15 +56,7 @@ def dw_conv(
             groups=in_channels,
             bias=False,
         ),
-        torch.nn.Conv2d(
-            in_channels,
-            out_channels,
-            kernel_size=1,
-            stride=1,
-            padding=0,
-            groups=1,
-            bias=True,
-        ),
+        torch.nn.Conv2d(in_channels, out_channels, kernel_size=1, bias=True),
         torch.nn.BatchNorm2d(out_channels),
         torch.nn.ReLU(inplace=True),
     ]
@@ -114,7 +70,7 @@ def conv(
     kernel_size: int = 3,
     padding: int = 1,
 ) -> List[torch.nn.Module]:
-    """ 3x3 convolution with padding """
+    """3x3 convolution with padding."""
     return [
         torch.nn.Conv2d(
             in_channels,
@@ -131,24 +87,22 @@ def conv(
 
 
 def pointwise(in_channels: int, out_channels: int) -> List[torch.nn.Module]:
-    """ Pointwise convolution. """
+    """Pointwise convolution."""
     return [
-        torch.nn.Conv2d(in_channels, out_channels, kernel_size=1, bias=False),
+        torch.nn.Conv2d(in_channels, out_channels, kernel_size=1, bias=True),
         torch.nn.BatchNorm2d(out_channels),
         torch.nn.ReLU(inplace=True),
     ]
 
 
 class eSE(torch.nn.Module):
-    """ This is adapted from the efficientnet Squeeze Excitation. The idea is not 
-    squeezing the number of channels keeps more information. """
+    """This is adapted from the efficientnet Squeeze Excitation. The idea is to not
+    squeeze the number of channels to keep more information."""
 
     def __init__(self, channel: int) -> None:
         super().__init__()
         self.avg_pool = torch.nn.AdaptiveAvgPool2d(1)
-        self.fc = torch.nn.Conv2d(
-            channel, channel, kernel_size=1, padding=0
-        )  # (Linear)
+        self.fc = torch.nn.Conv2d(channel, channel, kernel_size=1)  # (Linear)
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         out = self.avg_pool(x)
@@ -157,29 +111,51 @@ class eSE(torch.nn.Module):
         return out * x
 
 
-class OSA(torch.nn.Module):
+class _OSA(torch.nn.Module):
     def __init__(
         self,
         in_channels: int,
         stage_channels: int,
         concat_channels: int,
         layer_per_block: int,
-        identity: bool = False,
-        conv_op=conv,
+        use_depthwise: bool = False,
     ) -> None:
-
+        """Implementation of an OSA layer which takes the output of its conv layers and 
+        concatenates them into one large tensor which is passed to the next layer. The
+        goal with this concatenation is to preserve information flow through the model
+        layers. This also ends up helping with small object detection. 
+        
+        Args:
+            in_channels: Channel depth of the input to the OSA block.
+            stage_channels: Channel depth to reduce the input.
+            concat_channels: Channel depth to force on the concatenated output of the
+                comprising layers in a block.
+            layer_per_block: The number of layers in this OSA block.
+            use_depthwise: Wether to use depthwise separable pointwise linear convs.
+        """
         super().__init__()
-        original_channels = in_channels
-        self.identity = identity
-        self.isReduced = False
+        # Keep track of the size of the final concatenation tensor.
+        aggregated = in_channels
+        self.isReduced = in_channels != stage_channels
+        
+        # If this OSA block is not the first in the OSA stage, we can
+        # leverage the fact that subsequent OSA blocks have the same input and 
+        # output channel depth, concat_channels. This lets us reuse the concept of
+        # a residual from ResNet models.
+        self.identity = in_channels == concat_channels
         self.layers = torch.nn.ModuleList()
-        self.depthwise = type(conv_op) == dw_conv
+        self.use_depthwise = use_depthwise
+        conv_op = dw_conv if use_depthwise else conv
 
-        if self.depthwise and in_channels != stage_channels:
-            self.isReduced = True
+        # If this model uses depthwise and the input channel depth needs to be reduced
+        # to the stage_channels size, add a pointwise layer to adjust the depth. If the
+        # model is not depthwise, let the first OSA layer do the resizing.
+        if self.use_depthwise and self.isReduced:
             self.conv_reduction = torch.nn.Sequential(
                 *pointwise(in_channels, stage_channels)
             )
+            in_channels = stage_channels
+
         for _ in range(layer_per_block):
             self.layers.append(
                 torch.nn.Sequential(*conv_op(in_channels, stage_channels))
@@ -187,7 +163,7 @@ class OSA(torch.nn.Module):
             in_channels = stage_channels
 
         # feature aggregation
-        aggregated = original_channels + layer_per_block * stage_channels
+        aggregated += layer_per_block * stage_channels
         self.concat = torch.nn.Sequential(*pointwise(aggregated, concat_channels))
         self.ese = eSE(concat_channels)
 
@@ -197,8 +173,10 @@ class OSA(torch.nn.Module):
             identity_feat = x
 
         output = [x]
-        if self.depthwise and self.isReduced:
+        if self.use_depthwise and self.isReduced:
             x = self.conv_reduction(x)
+
+        # Loop through all the 
         for layer in self.layers:
             x = layer(x)
             output.append(x)
@@ -218,30 +196,43 @@ class _OSA_stage(torch.nn.Sequential):
     def __init__(
         self,
         in_channels: int,
-        stage_ch: int,
-        concat_ch: int,
+        stage_channels: int,
+        concat_channels: int,
         block_per_stage: int,
         layer_per_block: int,
         stage_num: int,
-        depthwise: bool = False,
+        use_depthwise: bool = False,
     ) -> None:
+        """An OSA stage which is comprised of OSA blocks.
+        Args:
+            in_channels: Channel depth of the input to the OSA stage.
+            stage_channels: Channel depth to reduce the input of the block to.
+            concat_channels: Channel depth to force on the concatenated output of the
+                comprising layers in a block.
+            block_per_stage: Number of OSA blocks in this stage.
+            layer_per_block: The number of layers per OSA block.
+            stage_num: The OSA stage index.
+            use_depthwise: Wether to use depthwise separable pointwise linear convs.
+        """
         super().__init__()
-
-        if not stage_num == 2:
-            self.add_module(
-                "Pooling", torch.nn.MaxPool2d(kernel_size=3, stride=2, padding=1)
-            )
+        
+        # Use maxpool to downsample the input to this OSA stage.
+        self.add_module(
+            "Pooling", torch.nn.MaxPool2d(kernel_size=3, stride=2, padding=1)
+        )
 
         for idx in range(block_per_stage):
+            # Add the OSA modules. If this is the first block in the stage, use the
+            # proper in in channels, but the rest of the rest of the OSA layers will use
+            # the concatenation channel depth outputted from the previous layer.
             self.add_module(
                 f"OSA{stage_num}_{idx + 1}",
-                OSA(
-                    in_channels if idx == 0 else concat_ch,
-                    stage_ch,
-                    concat_ch,
+                _OSA(
+                    in_channels if idx == 0 else concat_channels,
+                    stage_channels,
+                    concat_channels,
                     layer_per_block,
-                    identity=False if idx == 0 else True,
-                    conv_op=depthwise,
+                    use_depthwise=use_depthwise,
                 ),
             )
 
@@ -255,8 +246,45 @@ class VoVNet(torch.nn.Sequential):
             model_name: Which model to create.
             num_classes: The number of classification classes.
             input_channels: The number of input channels.
+
         Usage:
         >>> net = VoVNet("vovnet-19-slim-dw", num_classes=1000)
+        >>> with torch.no_grad():
+        ...    out = net(torch.randn(1, 3, 512, 512))
+        >>> print(out.shape)
+        torch.Size([1, 1000])
+
+        >>> net = VoVNet("vovnet-19-dw", num_classes=1000)
+        >>> with torch.no_grad():
+        ...    out = net(torch.randn(1, 3, 512, 512))
+        >>> print(out.shape)
+        torch.Size([1, 1000])
+
+        >>> net = VoVNet("vovnet-19-slim", num_classes=1000)
+        >>> with torch.no_grad():
+        ...    out = net(torch.randn(1, 3, 512, 512))
+        >>> print(out.shape)
+        torch.Size([1, 1000])
+
+        >>> net = VoVNet("vovnet-19", num_classes=1000)
+        >>> with torch.no_grad():
+        ...    out = net(torch.randn(1, 3, 512, 512))
+        >>> print(out.shape)
+        torch.Size([1, 1000])
+
+        >>> net = VoVNet("vovnet-39", num_classes=1000)
+        >>> with torch.no_grad():
+        ...    out = net(torch.randn(1, 3, 512, 512))
+        >>> print(out.shape)
+        torch.Size([1, 1000])
+
+        >>> net = VoVNet("vovnet-57", num_classes=1000)
+        >>> with torch.no_grad():
+        ...    out = net(torch.randn(1, 3, 512, 512))
+        >>> print(out.shape)
+        torch.Size([1, 1000])
+
+        >>> net = VoVNet("vovnet-99", num_classes=1000)
         >>> with torch.no_grad():
         ...    out = net(torch.randn(1, 3, 512, 512))
         >>> print(out.shape)
@@ -265,24 +293,28 @@ class VoVNet(torch.nn.Sequential):
         super().__init__()
         assert model_name in _STAGE_SPECS, f"{model_name} not supported."
 
-        self.model_name = model_name
-        stem_ch = _STAGE_SPECS[model_name]["stem_out"]
-        config_stage_ch = _STAGE_SPECS[model_name]["stage_conv_ch"]
-        config_concat_ch = _STAGE_SPECS[model_name]["stage_out_ch"]
-        block_per_stage = _STAGE_SPECS[model_name]["block_per_stage"]
-        layer_per_block = _STAGE_SPECS[model_name]["layer_per_block"]
-        conv_type = dw_conv if _STAGE_SPECS[model_name]["dw"] else conv
+        stem_ch = _STAGE_SPECS[model_name].stem_out
+        config_stage_ch = _STAGE_SPECS[model_name].stage_conv_ch
+        config_concat_ch = _STAGE_SPECS[model_name].stage_out_ch
+        block_per_stage = _STAGE_SPECS[model_name].block_per_stage
+        layer_per_block = _STAGE_SPECS[model_name].layer_per_block
+        conv_type = dw_conv if _STAGE_SPECS[model_name].dw else conv
 
         # Construct the stem.
         stem = conv(input_channels, 64, stride=2)
         stem += conv_type(64, 64)
-        stem += conv_type(64, stem_ch, stride=2)
+
+        # The original implementation uses a stride=2 on the conv below, but in this
+        # implementation we'll just pool at every OSA stage, unlike the original
+        # which doesn't pool at the first OSA stage.
+        stem += conv_type(64, stem_ch)
         self.model = torch.nn.Sequential()
         self.model.add_module("stem", torch.nn.Sequential(*stem))
         self._out_feature_channels = [stem_ch]
 
-        stem_out_ch = [stem_ch]
-        in_ch_list = stem_out_ch + config_concat_ch[:-1]
+        # Organize the outputs of each OSA stage. This is the concatentated channel
+        # depth of each sub block's layer's outputs.
+        in_ch_list = [stem_ch] + config_concat_ch[:-1]
 
         # Add the OSA modules. Typically 4 modules.
         for idx in range(len(config_stage_ch)):
@@ -295,7 +327,7 @@ class VoVNet(torch.nn.Sequential):
                     block_per_stage[idx],
                     layer_per_block,
                     idx + 2,
-                    conv_type,
+                    _STAGE_SPECS[model_name].dw,
                 ),
             )
 
@@ -308,12 +340,14 @@ class VoVNet(torch.nn.Sequential):
                 torch.nn.BatchNorm2d(self._out_feature_channels[-1]),
                 torch.nn.AdaptiveAvgPool2d(1),
                 torch.nn.Flatten(),
+                torch.nn.Dropout(0.2),
                 torch.nn.Linear(self._out_feature_channels[-1], num_classes, bias=True),
             ),
         )
 
         # Initialize weights.
         self._initialize_weights()
+        self.model.eval()
 
     def _initialize_weights(self):
         for module in self.model.modules():
@@ -335,7 +369,7 @@ class VoVNet(torch.nn.Sequential):
         >>> with torch.no_grad():
         ...    out = net.forward_pyramids(torch.randn(1, 3, 512, 512))
         >>> [level.shape[-1] for level in out.values()]  # Check the height/widths of levels
-        [128, 128, 64, 32, 16]
+        [256, 128, 64, 32, 16]
         >>> [level.shape[1] for level in out.values()]  == net._out_feature_channels
         True
         """
@@ -348,9 +382,9 @@ class VoVNet(torch.nn.Sequential):
         return levels
 
     def delete_classification_head(self) -> None:
-        """ Call this before using model as an object detection backbone. """
+        """Call this before using model as an object detection backbone."""
         del self.model.classifier
 
     def get_pyramid_channels(self) -> None:
-        """ Return the number of channels for each pyramid level. """
+        """Return the number of channels for each pyramid level."""
         return self._out_feature_channels
