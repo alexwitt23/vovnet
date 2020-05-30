@@ -78,7 +78,9 @@ _STAGE_SPECS = {
 }
 
 
-def dw_conv(in_channels: int, out_channels: int, stride: int = 1) -> List[torch.nn.Module]:
+def dw_conv(
+    in_channels: int, out_channels: int, stride: int = 1
+) -> List[torch.nn.Module]:
     """ Depthwise separable pointwise linear convolution. """
     return [
         torch.nn.Conv2d(
@@ -351,5 +353,4 @@ class VoVNet(torch.nn.Sequential):
 
     def get_pyramid_channels(self) -> None:
         """ Return the number of channels for each pyramid level. """
-        print(self._out_feature_channels)
         return self._out_feature_channels
