@@ -41,6 +41,9 @@ _STAGE_SPECS = {
     ),
 }
 
+_BN_MOMENTUM = 1e-2
+_BN_EPS = 1e-4
+
 
 def dw_conv(
     in_channels: int, out_channels: int, stride: int = 1
@@ -57,7 +60,7 @@ def dw_conv(
             bias=False,
         ),
         torch.nn.Conv2d(in_channels, out_channels, kernel_size=1, bias=True),
-        torch.nn.BatchNorm2d(out_channels),
+        torch.nn.BatchNorm2d(out_channels, _BN_MOMENTUM, _BN_EPS),
         torch.nn.ReLU(inplace=True),
     ]
 
@@ -70,7 +73,7 @@ def conv(
     kernel_size: int = 3,
     padding: int = 1,
 ) -> List[torch.nn.Module]:
-    """3x3 convolution with padding."""
+    """ 3x3 convolution with padding."""
     return [
         torch.nn.Conv2d(
             in_channels,
@@ -81,22 +84,22 @@ def conv(
             groups=groups,
             bias=False,
         ),
-        torch.nn.BatchNorm2d(out_channels),
-        torch.nn.ReLU(inplace=True),
+        torch.nn.BatchNorm2d(out_channels, _BN_MOMENTUM, _BN_EPS),
+        torch.nn.ReLU(inplace=True)
     ]
 
 
 def pointwise(in_channels: int, out_channels: int) -> List[torch.nn.Module]:
-    """Pointwise convolution."""
+    """ Pointwise convolution."""
     return [
         torch.nn.Conv2d(in_channels, out_channels, kernel_size=1, bias=True),
-        torch.nn.BatchNorm2d(out_channels),
-        torch.nn.ReLU(inplace=True),
+        torch.nn.BatchNorm2d(out_channels, _BN_MOMENTUM, _BN_EPS),
+        torch.nn.ReLU(inplace=True)
     ]
 
 
 class eSE(torch.nn.Module):
-    """This is adapted from the efficientnet Squeeze Excitation. The idea is to not
+    """ This is adapted from the efficientnet Squeeze Excitation. The idea is to not
     squeeze the number of channels to keep more information."""
 
     def __init__(self, channel: int) -> None:
@@ -120,7 +123,7 @@ class _OSA(torch.nn.Module):
         layer_per_block: int,
         use_depthwise: bool = False,
     ) -> None:
-        """Implementation of an OSA layer which takes the output of its conv layers and 
+        """ Implementation of an OSA layer which takes the output of its conv layers and 
         concatenates them into one large tensor which is passed to the next layer. The
         goal with this concatenation is to preserve information flow through the model
         layers. This also ends up helping with small object detection. 
@@ -183,7 +186,6 @@ class _OSA(torch.nn.Module):
 
         x = torch.cat(output, dim=1)
         xt = self.concat(x)
-
         xt = self.ese(xt)
 
         if self.identity:
@@ -337,7 +339,7 @@ class VoVNet(torch.nn.Sequential):
         self.model.add_module(
             "classifier",
             torch.nn.Sequential(
-                torch.nn.BatchNorm2d(self._out_feature_channels[-1]),
+                torch.nn.BatchNorm2d(self._out_feature_channels[-1], _BN_MOMENTUM, _BN_EPS),
                 torch.nn.AdaptiveAvgPool2d(1),
                 torch.nn.Flatten(),
                 torch.nn.Dropout(0.2),
